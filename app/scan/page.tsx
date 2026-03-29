@@ -28,24 +28,20 @@ export default function ScanPage() {
   const lastTimeRef = useRef<number>(0);
   const scannedSetRef = useRef<Set<string>>(new Set());
 
-  // ✅ โหลด items
-  const loadItems = async () => {
-    const { data } = await supabase.from("items").select("*");
-    if (data) {
-      setItems(data.reverse());
-      data.forEach(d => scannedSetRef.current.add(d.barcode));
-    }
-  };
-
-  // ✅ โหลด categories
-  const loadCategories = async () => {
-    const { data } = await supabase.from("categories").select("*");
-    if (data) setCategories(data);
-  };
-
+  // 🔹 โหลด items และ categories แบบ async ใน useEffect
   useEffect(() => {
-    loadItems();
-    loadCategories();
+    const fetchData = async () => {
+      const { data: itemsData } = await supabase.from("items").select("*");
+      if (itemsData) {
+        setItems(itemsData.reverse());
+        itemsData.forEach((d) => scannedSetRef.current.add(d.barcode));
+      }
+
+      const { data: categoriesData } = await supabase.from("categories").select("*");
+      if (categoriesData) setCategories(categoriesData);
+    };
+
+    fetchData();
 
     // Realtime subscribe
     const subscription = supabase
@@ -69,8 +65,7 @@ export default function ScanPage() {
   // 🔒 กันยิงเร็ว
   const isDuplicateScan = (barcode: string) => {
     const now = Date.now();
-    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500)
-      return true;
+    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500) return true;
     lastScanRef.current = barcode;
     lastTimeRef.current = now;
     return false;
@@ -125,7 +120,6 @@ export default function ScanPage() {
       setStatus("success");
       setBarcode("");
 
-      // update local state & memory
       const newItem: Item = {
         id: Date.now().toString(),
         category_code: categoryCode,
@@ -136,7 +130,6 @@ export default function ScanPage() {
       setItems((prev) => [newItem, ...prev]);
       scannedSetRef.current.add(barcode);
 
-      // ✨ highlight success 1 วินาที
       setTimeout(() => setStatus("idle"), 1000);
     } catch (err) {
       setStatus("error");
@@ -150,9 +143,7 @@ export default function ScanPage() {
 
         {/* HEADER */}
         <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
-          <h1 className="text-2xl font-bold text-gray-800">
-            📦 Stock Scanner
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">📦 Stock Scanner</h1>
           <p className="text-gray-500 text-sm">ยิง barcode เพื่อบันทึกสินค้า</p>
         </div>
 
@@ -193,14 +184,13 @@ export default function ScanPage() {
           <AnimatePresence>
             {items.map((item, index) => (
               <motion.div
-                key={item.id}
+                key={item.id + item.barcode} // unique key
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
                 transition={{ duration: 0.3 }}
                 className="flex items-center justify-between p-3 rounded-xl border bg-gray-50 text-sm"
               >
-                {/* LEFT */}
                 <div className="flex items-center gap-3 overflow-hidden">
                   <span className="w-6 text-right font-semibold text-gray-500">{index + 1}.</span>
                   <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${getCategoryColor(item.category_code)}`}>
@@ -209,7 +199,6 @@ export default function ScanPage() {
                   <span className="text-gray-500 truncate">{item.barcode}</span>
                 </div>
 
-                {/* RIGHT */}
                 <div className="font-bold text-blue-600 whitespace-nowrap">
                   {Number(item.weight).toFixed(3)} kg
                 </div>
