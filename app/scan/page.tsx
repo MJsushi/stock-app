@@ -23,7 +23,7 @@ export default function ScanPage() {
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  
+
   const lastScanRef = useRef<string>("");
   const lastTimeRef = useRef<number>(0);
   const scannedSetRef = useRef<Set<string>>(new Set());
@@ -31,12 +31,14 @@ export default function ScanPage() {
   // 🔹 โหลด items และ categories แบบ async ใน useEffect
   useEffect(() => {
     const fetchData = async () => {
+      // โหลด items
       const { data: itemsData } = await supabase.from("items").select("*");
       if (itemsData) {
         setItems(itemsData.reverse());
-        itemsData.forEach((d) => scannedSetRef.current.add(d.barcode));
+        itemsData.forEach(d => scannedSetRef.current.add(d.barcode));
       }
 
+      // โหลด categories
       const { data: categoriesData } = await supabase.from("categories").select("*");
       if (categoriesData) setCategories(categoriesData);
     };
@@ -65,7 +67,8 @@ export default function ScanPage() {
   // 🔒 กันยิงเร็ว
   const isDuplicateScan = (barcode: string) => {
     const now = Date.now();
-    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500) return true;
+    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500)
+      return true;
     lastScanRef.current = barcode;
     lastTimeRef.current = now;
     return false;
@@ -120,6 +123,7 @@ export default function ScanPage() {
       setStatus("success");
       setBarcode("");
 
+      // update local state & memory
       const newItem: Item = {
         id: Date.now().toString(),
         category_code: categoryCode,
@@ -175,7 +179,9 @@ export default function ScanPage() {
           </div>
           <div className="bg-white p-4 rounded-xl shadow text-center">
             <p className="text-gray-400 text-sm">น้ำหนักรวม (kg)</p>
-            <p className="text-xl font-bold text-blue-600">{items.reduce((sum, i) => sum + i.weight, 0).toFixed(2)}</p>
+            <p className="text-xl font-bold text-blue-600">
+              {items.reduce((sum, i) => sum + i.weight, 0).toFixed(2)}
+            </p>
           </div>
         </div>
 
@@ -191,6 +197,7 @@ export default function ScanPage() {
                 transition={{ duration: 0.3 }}
                 className="flex items-center justify-between p-3 rounded-xl border bg-gray-50 text-sm"
               >
+                {/* LEFT */}
                 <div className="flex items-center gap-3 overflow-hidden">
                   <span className="w-6 text-right font-semibold text-gray-500">{index + 1}.</span>
                   <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${getCategoryColor(item.category_code)}`}>
@@ -199,6 +206,7 @@ export default function ScanPage() {
                   <span className="text-gray-500 truncate">{item.barcode}</span>
                 </div>
 
+                {/* RIGHT */}
                 <div className="font-bold text-blue-600 whitespace-nowrap">
                   {Number(item.weight).toFixed(3)} kg
                 </div>
@@ -208,7 +216,6 @@ export default function ScanPage() {
 
           {items.length === 0 && <p className="text-center text-gray-400">ยังไม่มีข้อมูล</p>}
         </div>
-
       </div>
     </div>
   );
