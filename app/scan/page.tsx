@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { parseBarcode } from "@/lib/barcode";
 import { motion, AnimatePresence } from "framer-motion";
 
+// 📝 Type ของสินค้า
 type Item = {
   id: string;
   category_code: string;
@@ -13,23 +14,29 @@ type Item = {
   created_at: string;
 };
 
+// 📝 Type ของหมวดหมู่
 type Category = {
   code: string;
   name: string;
 };
 
 export default function ScanPage() {
+  // 🟢 State สำหรับ barcode input และ status
   const [barcode, setBarcode] = useState("");
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+
+  // 🟢 State สำหรับข้อมูล items และ categories
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
+  // 🟢 Refs สำหรับป้องกัน scan ซ้ำเร็วเกินไป
   const lastScanRef = useRef<string>("");
   const lastTimeRef = useRef<number>(0);
   const scannedSetRef = useRef<Set<string>>(new Set());
 
   // 🔹 โหลด items และ categories แบบ async ใน useEffect
   useEffect(() => {
+    // ฟังก์ชัน async แยกออกมา
     const fetchData = async () => {
       // โหลด items
       const { data: itemsData } = await supabase.from("items").select("*");
@@ -43,7 +50,7 @@ export default function ScanPage() {
       if (categoriesData) setCategories(categoriesData);
     };
 
-    fetchData();
+    fetchData(); // เรียกฟังก์ชัน async
 
     // Realtime subscribe
     const subscription = supabase
@@ -54,33 +61,33 @@ export default function ScanPage() {
         (payload) => {
           const newItem: Item = payload.new;
           if (!scannedSetRef.current.has(newItem.barcode)) {
-            setItems((prev) => [newItem, ...prev]);
+            setItems(prev => [newItem, ...prev]);
             scannedSetRef.current.add(newItem.barcode);
           }
         }
       )
       .subscribe();
 
+    // Cleanup เมื่อ component ถูก unmount
     return () => supabase.removeChannel(subscription);
   }, []);
 
-  // 🔒 กันยิงเร็ว
+  // 🔒 กันยิงเร็วซ้ำ ๆ
   const isDuplicateScan = (barcode: string) => {
     const now = Date.now();
-    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500)
-      return true;
+    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500) return true;
     lastScanRef.current = barcode;
     lastTimeRef.current = now;
     return false;
   };
 
-  // ✅ แปลง code → name
+  // ✅ แปลง category code → name
   const getCategoryName = (code: string) => {
-    const found = categories.find((c) => c.code === code);
+    const found = categories.find(c => c.code === code);
     return found ? found.name : code;
   };
 
-  // 🎨 สีแต่ละประเภท
+  // 🎨 สีของแต่ละ category
   const getCategoryColor = (code: string) => {
     switch (code) {
       case "000001":
@@ -94,7 +101,7 @@ export default function ScanPage() {
     }
   };
 
-  // ✅ submit
+  // ✅ ส่งข้อมูล barcode เข้า supabase
   const handleSubmit = async () => {
     if (barcode.length !== 13) {
       setStatus("error");
@@ -123,7 +130,7 @@ export default function ScanPage() {
       setStatus("success");
       setBarcode("");
 
-      // update local state & memory
+      // อัพเดท state ในเครื่อง
       const newItem: Item = {
         id: Date.now().toString(),
         category_code: categoryCode,
@@ -131,9 +138,10 @@ export default function ScanPage() {
         barcode,
         created_at: new Date().toISOString(),
       };
-      setItems((prev) => [newItem, ...prev]);
+      setItems(prev => [newItem, ...prev]);
       scannedSetRef.current.add(barcode);
 
+      // highlight success 1 วินาที
       setTimeout(() => setStatus("idle"), 1000);
     } catch (err) {
       setStatus("error");
@@ -166,7 +174,7 @@ export default function ScanPage() {
             `}
           />
           <div className="mt-2 h-5">
-            {status === "success" && <p className="text-green-600 text-sm">✔ บันทึกข้อมูลสำเร็จ</p>}
+            {status === "success" && <p className="text-green-600 text-sm">✔ บันทึกสำเร็จ</p>}
             {status === "error" && <p className="text-red-600 text-sm">✖ barcode ซ้ำหรือไม่ถูกต้อง</p>}
           </div>
         </div>
@@ -190,7 +198,7 @@ export default function ScanPage() {
           <AnimatePresence>
             {items.map((item, index) => (
               <motion.div
-                key={item.id + item.barcode} // unique key
+                key={item.id + item.barcode} // ❗ unique key
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
@@ -216,6 +224,7 @@ export default function ScanPage() {
 
           {items.length === 0 && <p className="text-center text-gray-400">ยังไม่มีข้อมูล</p>}
         </div>
+
       </div>
     </div>
   );
