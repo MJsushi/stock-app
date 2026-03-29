@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { parseBarcode } from "@/lib/barcode";
 import { motion, AnimatePresence } from "framer-motion";
 
-// 📝 Type ของสินค้า
+// 📦 ประเภท Item
 type Item = {
   id: string;
   category_code: string;
@@ -14,7 +14,7 @@ type Item = {
   created_at: string;
 };
 
-// 📝 Type ของหมวดหมู่
+// 🏷️ ประเภท Category
 type Category = {
   code: string;
   name: string;
@@ -30,9 +30,8 @@ export default function ScanPage() {
   const lastTimeRef = useRef<number>(0);
   const scannedSetRef = useRef<Set<string>>(new Set());
 
-  // 🔹 โหลด items และ categories แบบ async ใน useEffect
+  // 🔹 โหลด items & categories + subscribe realtime
   useEffect(() => {
-    // ฟังก์ชัน async ต้องประกาศแยก ไม่ใส่ตรง useEffect
     const fetchData = async () => {
       // โหลด items
       const { data: itemsData } = await supabase.from("items").select("*");
@@ -46,7 +45,8 @@ export default function ScanPage() {
       if (categoriesData) setCategories(categoriesData);
     };
 
-    fetchData(); // เรียก async function
+    // ⚡ ไม่ return promise ให้ TypeScript error
+    void fetchData();
 
     // 🔔 Realtime subscribe
     const subscription = supabase
@@ -55,47 +55,60 @@ export default function ScanPage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "items" },
         (payload) => {
-          const newItem: Item = payload.new;
-          if (!scannedSetRef.current.has(newItem.barcode)) {
-            setItems(prev => [newItem, ...prev]);
-            scannedSetRef.current.add(newItem.barcode);
+          const newItemCandidate = payload.new as Partial<Item>;
+          if (
+            newItemCandidate.id &&
+            newItemCandidate.category_code &&
+            typeof newItemCandidate.weight === "number" &&
+            newItemCandidate.barcode &&
+            newItemCandidate.created_at
+          ) {
+            const newItem: Item = {
+              id: newItemCandidate.id,
+              category_code: newItemCandidate.category_code,
+              weight: newItemCandidate.weight,
+              barcode: newItemCandidate.barcode,
+              created_at: newItemCandidate.created_at,
+            };
+
+            if (!scannedSetRef.current.has(newItem.barcode)) {
+              setItems(prev => [newItem, ...prev]);
+              scannedSetRef.current.add(newItem.barcode);
+            }
           }
         }
       )
       .subscribe();
 
-    // 🧹 Cleanup function ต้องเป็น sync function
+    // ✅ Cleanup
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, []); // ✅ ว่าง = run ครั้งเดียว
+  }, []);
 
-  // 🔒 กันยิงเร็วซ้ำ ๆ
+  // 🔒 กันยิงซ้ำ
   const isDuplicateScan = (barcode: string) => {
     const now = Date.now();
-    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500) return true;
+    if (barcode === lastScanRef.current && now - lastTimeRef.current < 1500)
+      return true;
     lastScanRef.current = barcode;
     lastTimeRef.current = now;
     return false;
   };
 
-  // ✅ แปลง category code → name
+  // 🔹 แปลง code → name
   const getCategoryName = (code: string) => {
     const found = categories.find(c => c.code === code);
     return found ? found.name : code;
   };
 
-  // 🎨 สีของแต่ละ category
+  // 🎨 สีแต่ละประเภท
   const getCategoryColor = (code: string) => {
     switch (code) {
-      case "000001":
-        return "bg-green-100 text-green-700";
-      case "000002":
-        return "bg-blue-100 text-blue-700";
-      case "000003":
-        return "bg-yellow-100 text-yellow-700";
-      default:
-        return "bg-gray-100 text-gray-700";
+      case "000001": return "bg-green-100 text-green-700";
+      case "000002": return "bg-blue-100 text-blue-700";
+      case "000003": return "bg-yellow-100 text-yellow-700";
+      default: return "bg-gray-100 text-gray-700";
     }
   };
 
@@ -128,6 +141,7 @@ export default function ScanPage() {
       setStatus("success");
       setBarcode("");
 
+      // update local state & memory
       const newItem: Item = {
         id: Date.now().toString(),
         category_code: categoryCode,
@@ -139,7 +153,7 @@ export default function ScanPage() {
       scannedSetRef.current.add(barcode);
 
       setTimeout(() => setStatus("idle"), 1000);
-    } catch (err) {
+    } catch {
       setStatus("error");
       setTimeout(() => setStatus("idle"), 1000);
     }
@@ -183,9 +197,7 @@ export default function ScanPage() {
           </div>
           <div className="bg-white p-4 rounded-xl shadow text-center">
             <p className="text-gray-400 text-sm">น้ำหนักรวม (kg)</p>
-            <p className="text-xl font-bold text-blue-600">
-              {items.reduce((sum, i) => sum + i.weight, 0).toFixed(2)}
-            </p>
+            <p className="text-xl font-bold text-blue-600">{items.reduce((sum, i) => sum + i.weight, 0).toFixed(2)}</p>
           </div>
         </div>
 
@@ -194,13 +206,14 @@ export default function ScanPage() {
           <AnimatePresence>
             {items.map((item, index) => (
               <motion.div
-                key={item.id + item.barcode}
+                key={item.id + item.barcode} // unique key
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
                 transition={{ duration: 0.3 }}
                 className="flex items-center justify-between p-3 rounded-xl border bg-gray-50 text-sm"
               >
+                {/* LEFT */}
                 <div className="flex items-center gap-3 overflow-hidden">
                   <span className="w-6 text-right font-semibold text-gray-500">{index + 1}.</span>
                   <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${getCategoryColor(item.category_code)}`}>
@@ -208,16 +221,15 @@ export default function ScanPage() {
                   </span>
                   <span className="text-gray-500 truncate">{item.barcode}</span>
                 </div>
-                <div className="font-bold text-blue-600 whitespace-nowrap">
-                  {Number(item.weight).toFixed(3)} kg
-                </div>
+
+                {/* RIGHT */}
+                <div className="font-bold text-blue-600 whitespace-nowrap">{Number(item.weight).toFixed(3)} kg</div>
               </motion.div>
             ))}
           </AnimatePresence>
 
           {items.length === 0 && <p className="text-center text-gray-400">ยังไม่มีข้อมูล</p>}
         </div>
-
       </div>
     </div>
   );
