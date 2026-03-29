@@ -166,7 +166,7 @@ export default function ScanPage() {
             `}
           />
           <div className="mt-2 h-5">
-            {status === "success" && <p className="text-green-600 text-sm">✔ บันทึกสำเร็จ</p>}
+            {status === "success" && <p className="text-green-600 text-sm">✔ บันทึกข้อมูลสำเร็จ</p>}
             {status === "error" && <p className="text-red-600 text-sm">✖ barcode ซ้ำหรือไม่ถูกต้อง</p>}
           </div>
         </div>
