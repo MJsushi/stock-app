@@ -21,22 +21,18 @@ type Category = {
 };
 
 export default function ScanPage() {
-  // 🟢 State สำหรับ barcode input และ status
   const [barcode, setBarcode] = useState("");
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-
-  // 🟢 State สำหรับข้อมูล items และ categories
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // 🟢 Refs สำหรับป้องกัน scan ซ้ำเร็วเกินไป
   const lastScanRef = useRef<string>("");
   const lastTimeRef = useRef<number>(0);
   const scannedSetRef = useRef<Set<string>>(new Set());
 
   // 🔹 โหลด items และ categories แบบ async ใน useEffect
   useEffect(() => {
-    // ฟังก์ชัน async แยกออกมา
+    // ฟังก์ชัน async ต้องประกาศแยก ไม่ใส่ตรง useEffect
     const fetchData = async () => {
       // โหลด items
       const { data: itemsData } = await supabase.from("items").select("*");
@@ -50,9 +46,9 @@ export default function ScanPage() {
       if (categoriesData) setCategories(categoriesData);
     };
 
-    fetchData(); // เรียกฟังก์ชัน async
+    fetchData(); // เรียก async function
 
-    // Realtime subscribe
+    // 🔔 Realtime subscribe
     const subscription = supabase
       .channel("public:items")
       .on(
@@ -68,9 +64,11 @@ export default function ScanPage() {
       )
       .subscribe();
 
-    // Cleanup เมื่อ component ถูก unmount
-    return () => supabase.removeChannel(subscription);
-  }, []);
+    // 🧹 Cleanup function ต้องเป็น sync function
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, []); // ✅ ว่าง = run ครั้งเดียว
 
   // 🔒 กันยิงเร็วซ้ำ ๆ
   const isDuplicateScan = (barcode: string) => {
@@ -101,7 +99,7 @@ export default function ScanPage() {
     }
   };
 
-  // ✅ ส่งข้อมูล barcode เข้า supabase
+  // ✅ submit barcode
   const handleSubmit = async () => {
     if (barcode.length !== 13) {
       setStatus("error");
@@ -130,7 +128,6 @@ export default function ScanPage() {
       setStatus("success");
       setBarcode("");
 
-      // อัพเดท state ในเครื่อง
       const newItem: Item = {
         id: Date.now().toString(),
         category_code: categoryCode,
@@ -141,7 +138,6 @@ export default function ScanPage() {
       setItems(prev => [newItem, ...prev]);
       scannedSetRef.current.add(barcode);
 
-      // highlight success 1 วินาที
       setTimeout(() => setStatus("idle"), 1000);
     } catch (err) {
       setStatus("error");
@@ -198,14 +194,13 @@ export default function ScanPage() {
           <AnimatePresence>
             {items.map((item, index) => (
               <motion.div
-                key={item.id + item.barcode} // ❗ unique key
+                key={item.id + item.barcode}
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
                 transition={{ duration: 0.3 }}
                 className="flex items-center justify-between p-3 rounded-xl border bg-gray-50 text-sm"
               >
-                {/* LEFT */}
                 <div className="flex items-center gap-3 overflow-hidden">
                   <span className="w-6 text-right font-semibold text-gray-500">{index + 1}.</span>
                   <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${getCategoryColor(item.category_code)}`}>
@@ -213,8 +208,6 @@ export default function ScanPage() {
                   </span>
                   <span className="text-gray-500 truncate">{item.barcode}</span>
                 </div>
-
-                {/* RIGHT */}
                 <div className="font-bold text-blue-600 whitespace-nowrap">
                   {Number(item.weight).toFixed(3)} kg
                 </div>
