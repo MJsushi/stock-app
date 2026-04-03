@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { parseBarcode } from "@/lib/barcode";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 
 // 📦 ประเภท Item
 type Item = {
@@ -164,9 +165,31 @@ export default function ScanPage() {
       <div className="max-w-3xl mx-auto">
 
         {/* HEADER */}
-        <div className="bg-white rounded-2xl shadow-lg p-5 mb-4">
-          <h1 className="text-2xl font-bold text-gray-800">📦 Stock Scanner</h1>
-          <p className="text-gray-500 text-sm">ยิง barcode เพื่อบันทึกสินค้า</p>
+        <div className="bg-white rounded-2xl shadow-lg p-4 mb-4 
+        flex items-center justify-between">
+
+          {/* LEFT */}
+          <div>
+            <h1 className="text-lg font-bold text-gray-800">
+              📦 Stock Scanner
+            </h1>
+            <p className="text-gray-500 text-xs">
+              ยิง barcode เพื่อบันทึกสินค้า
+            </p>
+          </div>
+
+          {/* 👉 ICON + TEXT */}
+          <Link
+            href="/categories"
+            className="flex items-center gap-1.5 
+            px-3 py-2 rounded-xl 
+            bg-gradient-to-r from-indigo-500 to-blue-600 
+            text-white text-xs font-medium
+            shadow-md hover:shadow-lg active:scale-95 transition-all"
+          >
+            🗂 <span className="sm:inline">หมวดหมู่</span>
+          </Link>
+
         </div>
 
         {/* SCAN BOX */}
