@@ -34,6 +34,20 @@ export default function ScanPage() {
   const lastTimeRef = useRef(0);
   const editingRef = useRef<HTMLDivElement | null>(null);
 
+  const inputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+      inputRef.current?.focus();
+    }, []);
+
+  const formatDateTime = (date: string) => {
+    const d = new Date(date);
+      return d.toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        dateStyle: "short",
+        timeStyle: "medium",
+      });
+    };
+
   // 🔹 โหลดข้อมูล
   const loadData = async () => {
     const { data } = await supabase
@@ -49,6 +63,37 @@ export default function ScanPage() {
 
   useEffect(() => {
     loadData();
+  }, []);
+  
+  //realtime
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-items")
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // หรือใช้ "INSERT" ก็ได้
+          schema: "public",
+          table: "items",
+        },
+        (payload) => {
+          console.log("Realtime:", payload);
+
+          // 🔥 วิธีง่าย: reload ทั้งหมด
+          loadData();
+
+          // 🎯 หรือจะ highlight item ใหม่
+          if (payload.eventType === "INSERT") {
+            setHighlightId(payload.new.id);
+            setTimeout(() => setHighlightId(null), 2000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // 🔹 scroll ไป item ที่ edit
@@ -266,6 +311,7 @@ export default function ScanPage() {
                   }
                 }
               }}
+              ref={inputRef}
               placeholder="scan / manual"
               className="flex-1 p-3 border rounded-xl text-gray-900"
             />
@@ -341,6 +387,7 @@ export default function ScanPage() {
             <span>No.</span>
             <span>สินค้า</span>
             <span>Weight</span>
+            <span>รับเข้า</span>
             <span className="text-right">
               {isEditMode ? "Actions" : ""}
             </span>
@@ -394,6 +441,9 @@ export default function ScanPage() {
 
                       <span className="text-blue-700 font-bold">
                         {item.weight.toFixed(3)}
+                      </span>
+                      <span className="text-gray-600 text-xs">
+                        {formatDateTime(item.created_at)}
                       </span>
 
                       <div className="flex justify-end gap-2">
