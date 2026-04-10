@@ -64,7 +64,7 @@ export default function ScanPage() {
   useEffect(() => {
     loadData();
   }, []);
-  
+
   //realtime
   useEffect(() => {
     const channel = supabase
@@ -268,11 +268,11 @@ export default function ScanPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 p-4 text-gray-900">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-linear-to-br from-gray-100 to-gray-200 p-2 sm:p-4 text-gray-900">
+      <div className="max-w-4xl mx-auto w-full">
 
         {/* HEADER */}
-        <div className="bg-white rounded-2xl shadow p-4 mb-4 flex justify-between items-center">
+        <div className="bg-white rounded-2xl shadow p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
           <h1 className="font-bold text-lg">📦 Stock Scanner</h1>
 
           <div className="flex gap-2">
@@ -313,11 +313,11 @@ export default function ScanPage() {
               }}
               ref={inputRef}
               placeholder="scan / manual"
-              className="flex-1 p-3 border rounded-xl text-gray-900"
+              className="flex-1 p-3 border rounded-xl text-gray-900 text-sm sm:text-base"
             />
             <button
               onClick={handleSave}
-              className="bg-green-600 text-white px-4 rounded-xl"
+              className="bg-green-600 text-white px-4 rounded-xl text-sm sm:text-base"
             >
               {editing ? "แก้ไข" : "เพิ่ม"}
             </button>
@@ -325,8 +325,8 @@ export default function ScanPage() {
 
           {/* preview */}
           {barcode.length >= 6 && (
-            <div className="mt-2 text-sm">
-              <span className="text-gray-600">หมวด: </span>
+            <div className="mt-2 text-xs sm:text-sm flex flex-wrap gap-2">
+              <span className="text-gray-600">หมวด:</span>
               <span
                 className={`font-semibold ${
                   isValidCategory(previewCategory)
@@ -337,29 +337,29 @@ export default function ScanPage() {
                 {getCategoryName(previewCategory)}
               </span>
 
-              <span className="ml-3 text-gray-600">
+              <span className="text-gray-600">
                 น้ำหนัก: {previewWeight.toFixed(3)} kg
               </span>
 
               {!isValidCategory(previewCategory) && (
-                <span className="ml-2 text-red-500">❌ ไม่มีหมวด</span>
+                <span className="text-red-500">❌ ไม่มีหมวด</span>
               )}
             </div>
           )}
         </div>
 
         {/* SEARCH */}
-        <div className="p-4">
+        <div className="p-2 sm:p-4">
           <input
             placeholder="🔍 ค้นหา..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full p-3 rounded-xl border text-gray-900"
+            className="w-full p-3 rounded-xl border text-gray-900 text-sm sm:text-base"
           />
         </div>
 
-        {/* DASHBOARD สรุป */}
-        <div className="bg-white p-4 rounded-xl shadow mb-3 flex justify-between text-sm text-gray-700">
+        {/* DASHBOARD */}
+        <div className="bg-white p-4 rounded-xl shadow mb-3 flex flex-col sm:flex-row gap-2 sm:justify-between text-xs sm:text-sm text-gray-700">
           {(() => {
             const filteredItems = items.filter((i) => {
               const k = search.toLowerCase();
@@ -369,13 +369,21 @@ export default function ScanPage() {
               );
             });
 
-            const totalWeight = filteredItems.reduce((sum, i) => sum + i.weight, 0).toFixed(3);
+            const totalWeight = filteredItems
+              .reduce((sum, i) => sum + i.weight, 0)
+              .toFixed(3);
             const totalCount = filteredItems.length;
 
             return (
               <>
-                <div>จำนวนทั้งหมด: <span className="font-semibold">{totalCount}</span> รายการ</div>
-                <div>น้ำหนักรวม: <span className="font-semibold">{totalWeight} kg</span></div>
+                <div>
+                  จำนวนทั้งหมด:{" "}
+                  <span className="font-semibold">{totalCount}</span> รายการ
+                </div>
+                <div>
+                  น้ำหนักรวม:{" "}
+                  <span className="font-semibold">{totalWeight} kg</span>
+                </div>
               </>
             );
           })()}
@@ -383,7 +391,9 @@ export default function ScanPage() {
 
         {/* LIST */}
         <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <div className="grid grid-cols-[50px_1fr_120px_auto] p-3 text-sm font-semibold border-b bg-gray-50">
+
+          {/* HEADER TABLE (desktop only) */}
+          <div className="hidden sm:grid grid-cols-[50px_1fr_120px_120px_auto] p-3 text-sm font-semibold border-b bg-gray-50">
             <span>No.</span>
             <span>สินค้า</span>
             <span>Weight</span>
@@ -393,7 +403,8 @@ export default function ScanPage() {
             </span>
           </div>
 
-          <div className="overflow-y-auto p-0 space-y-1 text-sm" style={{ height: 'calc(100vh - 180px)' }}>
+          {/* LIST BODY */}
+          <div className="overflow-y-auto max-h-[70vh] sm:max-h-[calc(100vh-180px)] space-y-1 text-sm">
             <AnimatePresence>
               {items
                 .filter((i) => {
@@ -419,34 +430,44 @@ export default function ScanPage() {
                         y: 0,
                         scale: isEditing ? 1.02 : 1,
                       }}
-                      className={`grid grid-cols-[50px_1fr_120px_auto] items-center p-3 rounded-xl border
-                        ${
-                          isEditing
-                            ? "bg-yellow-100 border-yellow-400"
-                            : isHighlight
-                            ? "bg-green-100 border-green-400"
-                            : "bg-gray-50 border-transparent"
-                        }`}
+                      className={`flex flex-col sm:grid sm:grid-cols-[50px_1fr_120px_120px_auto]
+                      gap-1 sm:gap-0 items-start sm:items-center
+                      p-2 mx-2 rounded-xl border
+                      ${
+                        isEditing
+                          ? "bg-yellow-100 border-yellow-400"
+                          : isHighlight
+                          ? "bg-green-100 border-green-400"
+                          : "bg-gray-50 border-transparent"
+                      }`}
                     >
-                      <span>{index + 1}</span>
+                      {/* No */}
+                      <span className="text-xs text-gray-400 sm:text-base">
+                        {index + 1}
+                      </span>
 
-                      <div className="flex gap-2 overflow-hidden p-0">
+                      {/* Product */}
+                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 overflow-hidden">
                         <span className="truncate font-medium">
                           {highlight(item.barcode)}
                         </span>
-                        <span className="text-gray-500 text-sm">
+                        <span className="text-gray-500 text-xs sm:text-sm">
                           ({highlight(getCategoryName(item.category_code))})
                         </span>
                       </div>
 
-                      <span className="text-blue-700 font-bold">
+                      {/* Weight */}
+                      <span className="text-blue-700 font-bold text-sm sm:text-base">
                         {item.weight.toFixed(3)}
                       </span>
+
+                      {/* Date */}
                       <span className="text-gray-600 text-xs">
                         {formatDateTime(item.created_at)}
                       </span>
 
-                      <div className="flex justify-end gap-2">
+                      {/* Actions */}
+                      <div className="flex flex-wrap sm:flex-nowrap justify-start sm:justify-end gap-2 mt-1 sm:mt-0">
                         {isEditMode && (
                           <>
                             <button

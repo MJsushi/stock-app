@@ -139,17 +139,17 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-100 to-gray-200 p-4 text-gray-900">
+    <div className="h-screen flex flex-col bg-linear-to-br from-gray-100 to-gray-200 p-4 text-gray-900">
       <div className="max-w-3xl mx-auto w-full flex flex-col h-full">
 
         {/* HEADER */}
         <div className="flex justify-between items-center mb-3">
-          <h1 className="text-2xl font-bold">🗂 Categories</h1>
+          <h1 className="font-bold text-lg">🗂 Categories</h1>
 
           <div className="flex gap-2">
             <button
               onClick={() => setIsEditMode(!isEditMode)}
-              className={`px-4 py-2 rounded-xl text-white ${
+              className={`px-3 py-2 rounded-xl text-xs text-white ${
                 isEditMode ? "bg-gray-600" : "bg-yellow-500"
               }`}
             >
@@ -158,9 +158,9 @@ export default function CategoriesPage() {
 
             <Link
               href="/scan"
-              className="bg-blue-600 text-white px-4 py-2 rounded-xl"
+              className="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs"
             >
-              ← Scan
+              Scan
             </Link>
           </div>
         </div>
