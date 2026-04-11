@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { parseBarcode } from "@/lib/barcode";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 type Item = {
   id: string;
@@ -37,6 +39,25 @@ export default function ScanPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [search, fromDateTime, toDateTime]);
+
+  const getFileName = (type: "all" | "page") => {
+    const now = new Date();
+
+    const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const from = fromDateTime ? fromDateTime.slice(0, 10) : "";
+    const to = toDateTime ? toDateTime.slice(0, 10) : "";
+
+    const dateRange =
+      from && to ? `${from}_to_${to}` : date;
+
+    const keyword = search ? `_${search}` : "";
+
+    const page =
+      type === "page" ? `_page${currentPage}` : "_all";
+
+    return `stock${keyword}_${dateRange}${page}.xlsx`;
+  };
   
 
   const lastScanRef = useRef("");
@@ -303,6 +324,40 @@ export default function ScanPage() {
     currentPage * itemsPerPage
   );
 
+  // 👇 export excel
+  const exportToExcel = (type: "all" | "page" = "all") => {
+    const dataSource =
+      type === "page" ? paginatedItems : filteredItems;
+
+    const data = dataSource.map((item, index) => ({
+      No:
+        type === "page"
+          ? (currentPage - 1) * itemsPerPage + index + 1
+          : index + 1,
+      Barcode: item.barcode,
+      Category: getCategoryName(item.category_code),
+      Weight: item.weight,
+      Date: formatDateTime(item.created_at),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
+
+    const file = new Blob([excelBuffer], {
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    saveAs(file, getFileName(type));
+  };
+
+
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-100 to-gray-200 p-2 sm:p-4 text-gray-900">
       <div className="max-w-4xl mx-auto w-full">
@@ -462,6 +517,22 @@ export default function ScanPage() {
             );
           })()}
         </div>
+
+        <div className="flex gap-2 mb-2 mx-2">
+        <button
+          onClick={() => exportToExcel("all")}
+          className="bg-green-600 text-white px-3 py-1 rounded text-xs"
+        >
+          Export ทั้งหมด
+        </button>
+
+        <button
+          onClick={() => exportToExcel("page")}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-xs"
+        >
+          Export หน้านี้
+        </button>
+      </div>  
 
         {/* LIST */}
         <div className="bg-white rounded-2xl shadow overflow-hidden">
