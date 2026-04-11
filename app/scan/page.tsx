@@ -29,6 +29,15 @@ export default function ScanPage() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [fromDateTime, setFromDateTime] = useState("");
+  const [toDateTime, setToDateTime] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20; // ปรับได้ตามต้องการ
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, fromDateTime, toDateTime]);
+  
 
   const lastScanRef = useRef("");
   const lastTimeRef = useRef(0);
@@ -267,6 +276,33 @@ export default function ScanPage() {
     setBarcode(item.barcode);
   };
 
+  // รวม filter + pagination
+  const filteredItems = items.filter((i) => {
+    const k = search.toLowerCase();
+
+    const matchText =
+      i.barcode.toLowerCase().includes(k) ||
+      getCategoryName(i.category_code).toLowerCase().includes(k);
+
+    const itemTime = new Date(i.created_at).getTime();
+
+    const from = fromDateTime ? new Date(fromDateTime).getTime() : null;
+    const to = toDateTime ? new Date(toDateTime).getTime() : null;
+
+    const matchDate =
+      (!from || itemTime >= from) &&
+      (!to || itemTime <= to);
+
+    return matchText && matchDate;
+  });
+
+  // 🔥 pagination
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = filteredItems.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   return (
     <div className="min-h-screen bg-linear-to-br from-gray-100 to-gray-200 p-2 sm:p-4 text-gray-900">
       <div className="max-w-4xl mx-auto w-full">
@@ -358,15 +394,53 @@ export default function ScanPage() {
           />
         </div>
 
+        {/* DATE FILTER */}
+        <div className="px-2 sm:px-4 pb-2 flex flex-col sm:flex-row gap-2">
+          <input
+            type="datetime-local"
+            value={fromDateTime}
+            onChange={(e) => setFromDateTime(e.target.value)}
+            className="p-2 border rounded-xl text-sm"
+          />
+
+          <input
+            type="datetime-local"
+            value={toDateTime}
+            onChange={(e) => setToDateTime(e.target.value)}
+            className="p-2 border rounded-xl text-sm"
+          />
+
+          <button
+            onClick={() => {
+              setFromDateTime("");
+              setToDateTime("");
+            }}
+            className="bg-gray-300 px-3 rounded-xl text-xs"
+          >
+            ล้าง
+          </button>
+        </div>
+
         {/* DASHBOARD */}
         <div className="bg-white p-4 rounded-xl shadow mb-3 flex flex-col sm:flex-row gap-2 sm:justify-between text-xs sm:text-sm text-gray-700">
           {(() => {
             const filteredItems = items.filter((i) => {
               const k = search.toLowerCase();
-              return (
+
+              const matchText =
                 i.barcode.toLowerCase().includes(k) ||
-                getCategoryName(i.category_code).toLowerCase().includes(k)
-              );
+                getCategoryName(i.category_code).toLowerCase().includes(k);
+
+              const itemTime = new Date(i.created_at).getTime();
+
+              const from = fromDateTime ? new Date(fromDateTime).getTime() : null;
+              const to = toDateTime ? new Date(toDateTime).getTime() : null;
+
+              const matchDate =
+                (!from || itemTime >= from) &&
+                (!to || itemTime <= to);
+
+              return matchText && matchDate;
             });
 
             const totalWeight = filteredItems
@@ -406,96 +480,107 @@ export default function ScanPage() {
           {/* LIST BODY */}
           <div className="overflow-y-auto max-h-[70vh] sm:max-h-[calc(100vh-180px)] space-y-1 text-sm">
             <AnimatePresence>
-              {items
-                .filter((i) => {
-                  const k = search.toLowerCase();
-                  return (
-                    i.barcode.toLowerCase().includes(k) ||
-                    getCategoryName(i.category_code)
-                      .toLowerCase()
-                      .includes(k)
-                  );
-                })
-                .map((item, index) => {
-                  const isEditing = editing?.id === item.id;
-                  const isHighlight = highlightId === item.id;
+              {paginatedItems.map((item, index) => {
+                const isEditing = editing?.id === item.id;
+                const isHighlight = highlightId === item.id;
 
-                  return (
-                    <motion.div
-                      key={item.id}
-                      ref={isEditing ? editingRef : null}
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{
-                        opacity: 1,
-                        y: 0,
-                        scale: isEditing ? 1.02 : 1,
-                      }}
-                      className={`flex flex-col sm:grid sm:grid-cols-[50px_1fr_120px_120px_auto]
-                      gap-1 sm:gap-0 items-start sm:items-center
-                      p-2 mx-2 rounded-xl border
-                      ${
-                        isEditing
-                          ? "bg-yellow-100 border-yellow-400"
-                          : isHighlight
-                          ? "bg-green-100 border-green-400"
-                          : "bg-gray-50 border-transparent"
-                      }`}
-                    >
-                      {/* No */}
-                      <span className="text-xs text-gray-400 sm:text-base">
-                        {index + 1}
+                return (
+                  <motion.div
+                    key={item.id}
+                    ref={isEditing ? editingRef : null}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{
+                      opacity: 1,
+                      y: 0,
+                      scale: isEditing ? 1.02 : 1,
+                    }}
+                    className={`flex flex-col sm:grid sm:grid-cols-[50px_1fr_120px_120px_auto]
+                    gap-1 sm:gap-0 items-start sm:items-center
+                    p-2 mx-2 rounded-xl border
+                    ${
+                      isEditing
+                        ? "bg-yellow-100 border-yellow-400"
+                        : isHighlight
+                        ? "bg-green-100 border-green-400"
+                        : "bg-gray-50 border-transparent"
+                    }`}
+                  >
+                    {/* No. (ข้ามหน้าแล้วไม่มั่ว) */}
+                    <span className="text-xs text-gray-400 sm:text-base">
+                      {(currentPage - 1) * itemsPerPage + index + 1}
+                    </span>
+
+                    {/* Product */}
+                    <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 overflow-hidden">
+                      <span className="truncate font-medium">
+                        {highlight(item.barcode)}
                       </span>
-
-                      {/* Product */}
-                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 overflow-hidden">
-                        <span className="truncate font-medium">
-                          {highlight(item.barcode)}
-                        </span>
-                        <span className="text-gray-500 text-xs sm:text-sm">
-                          ({highlight(getCategoryName(item.category_code))})
-                        </span>
-                      </div>
-
-                      {/* Weight */}
-                      <span className="text-blue-700 font-bold text-sm sm:text-base">
-                        {item.weight.toFixed(3)}
+                      <span className="text-gray-500 text-xs sm:text-sm">
+                        ({highlight(getCategoryName(item.category_code))})
                       </span>
+                    </div>
 
-                      {/* Date */}
-                      <span className="text-gray-600 text-xs">
-                        {formatDateTime(item.created_at)}
-                      </span>
+                    {/* Weight */}
+                    <span className="text-blue-700 font-bold text-sm sm:text-base">
+                      {item.weight.toFixed(3)}
+                    </span>
 
-                      {/* Actions */}
-                      <div className="flex flex-wrap sm:flex-nowrap justify-start sm:justify-end gap-2 mt-1 sm:mt-0">
-                        {isEditMode && (
-                          <>
-                            <button
-                              onClick={() => handleEdit(item)}
-                              className="bg-yellow-400 px-2 py-1 text-xs rounded text-white"
-                            >
-                              {isEditing ? "กำลังแก้..." : "แก้ไข"}
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item)}
-                              className="bg-red-500 px-2 py-1 text-xs rounded text-white"
-                            >
-                              ลบ
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                    {/* Date */}
+                    <span className="text-gray-600 text-xs">
+                      {formatDateTime(item.created_at)}
+                    </span>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap sm:flex-nowrap justify-start sm:justify-end gap-2 mt-1 sm:mt-0">
+                      {isEditMode && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="bg-yellow-400 px-2 py-1 text-xs rounded text-white"
+                          >
+                            {isEditing ? "กำลังแก้..." : "แก้ไข"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="bg-red-500 px-2 py-1 text-xs rounded text-white"
+                          >
+                            ลบ
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
 
-            {items.length === 0 && (
+            {paginatedItems.length === 0 && (
               <p className="text-center text-gray-500 mt-4">
                 ยังไม่มีข้อมูล
               </p>
             )}
           </div>
+        </div>
+        <div className="flex justify-center items-center gap-2 mt-3 text-sm">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            className="px-3 py-1 bg-gray-200 rounded"
+          >
+            ◀
+          </button>
+
+          <span>
+            หน้า {currentPage} / {totalPages || 1}
+          </span>
+
+          <button
+            onClick={() =>
+              setCurrentPage((p) => Math.min(p + 1, totalPages))
+            }
+            className="px-3 py-1 bg-gray-200 rounded"
+          >
+            ▶
+          </button>
         </div>
       </div>
     </div>
