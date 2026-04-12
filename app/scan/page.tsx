@@ -375,10 +375,15 @@ export default function ScanPage() {
             >
               {isEditMode ? "ปิด" : "Edit"}
             </button>
-
+            <Link
+              href="/dashboard"
+              className="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs"
+            >
+              📊 Dashboard
+            </Link>
             <Link
               href="/categories"
-              className="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs"
+              className="bg-blue-400 text-white px-3 py-2 rounded-xl text-xs"
             >
               🗂 หมวดหมู่
             </Link>
