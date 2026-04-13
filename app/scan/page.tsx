@@ -14,6 +14,7 @@ type Item = {
   weight: number;
   barcode: string;
   created_at: string;
+  shift_date: string;
 };
 
 type Category = {
@@ -34,6 +35,26 @@ export default function ScanPage() {
   const [fromDateTime, setFromDateTime] = useState("");
   const [toDateTime, setToDateTime] = useState("");
 
+  // เวลาทำงานกะ
+  const getShiftDate = (date: string) => {
+    const d = new Date(date);
+
+    // เอาเวลาไทย
+    const hours = new Date(
+      d.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+    ).getHours();
+
+    // ถ้าเวลา >= 22 ให้ +1 วัน
+    if (hours >= 22) {
+      d.setDate(d.getDate() + 1);
+    }
+
+    return new Date(
+      d.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+    ).toLocaleDateString("th-TH");
+  };
+  
+  //จำนวนแสดงผลต่อหน้า
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20; // ปรับได้ตามต้องการ
   useEffect(() => {
@@ -77,6 +98,51 @@ export default function ScanPage() {
         timeStyle: "medium",
       });
     };
+  
+    //กะปัจจุบัน    
+    const getCurrentShiftDate = () => {
+      const now = new Date();
+
+      const local = new Date(
+        now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+      );
+
+      if (local.getHours() >= 22) {
+        local.setDate(local.getDate() + 1);
+      }
+
+      const year = local.getFullYear();
+      const month = String(local.getMonth() + 1).padStart(2, "0");
+      const day = String(local.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    };
+    useEffect(() => {
+      const shiftDate = getCurrentShiftDate();
+
+      setFromDateTime(shiftDate);
+      setToDateTime(shiftDate);
+    }, []);
+    
+    //กะที่ค้นหา
+    const getShiftDateKey = (date: string) => {
+    const d = new Date(date);
+
+    const local = new Date(
+      d.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+    );
+
+    if (local.getHours() >= 22) {
+      local.setDate(local.getDate() + 1);
+    }
+
+    // ✅ ใช้ local date แทน ISO
+    const year = local.getFullYear();
+    const month = String(local.getMonth() + 1).padStart(2, "0");
+    const day = String(local.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
 
   // 🔹 โหลดข้อมูล
   const loadData = async () => {
@@ -142,7 +208,7 @@ export default function ScanPage() {
   const isValidCategory = (code: string) => {
     return categories.some((c) => c.code === code);
   };
-
+  
   // ✅ validate barcode
   const validateBarcode = (code: string) => {
     if (code.length !== 13) return "❌ barcode ต้อง 13 หลัก";
@@ -202,87 +268,133 @@ export default function ScanPage() {
     } catch {}
   }
 
-  // 🔥 save (แก้แล้ว)
+  // 🔥 save
   const handleSave = async () => {
-    if (!barcode) return;
+  if (!barcode) return;
 
-    const errorMsg = validateBarcode(barcode);
+  const errorMsg = validateBarcode(barcode);
 
-    if (errorMsg) {
-      alert(errorMsg);
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 1200);
+  if (errorMsg) {
+    alert(errorMsg);
+    setStatus("error");
+    setBarcode("");
+    inputRef.current?.focus();
+    setTimeout(() => setStatus("idle"), 1200);
+    return;
+  }
+
+  try {
+    const parsed = parseBarcode(barcode);
+    const categoryCode = parsed.categoryCode;
+    const weight = parsed.weight;
+
+    if (!isValidCategory(categoryCode)) {
+      alert("❌ ไม่พบหมวดหมู่");
       return;
     }
 
-    try {
-      const parsed = parseBarcode(barcode);
-      const categoryCode = parsed.categoryCode;
-      const weight = parsed.weight;
+    // 🔥 shift ปัจจุบัน
+    const currentShiftDate = getShiftDateKey(new Date().toISOString());
 
-      if (!isValidCategory(categoryCode)) {
-        alert("❌ ไม่พบหมวดหมู่");
-        return;
-      }
+    // 🔥 query barcode เดียวกันทั้งหมด
+    const { data: existingItems, error: fetchError } = await supabase
+      .from("items")
+      .select("id, created_at")
+      .eq("barcode", barcode);
 
-      // 🔹 ตรวจสอบซ้ำจากฐานข้อมูล
-      const { data: existingItem } = await supabase
-        .from("items")
-        .select("id")
-        .eq("barcode", barcode)
-        .single();
+    if (fetchError) throw fetchError;
 
-      if (existingItem && (!editing || existingItem.id !== editing.id)) {
-        alert("❌ Barcode นี้มีอยู่แล้วในระบบ");
-        return;
-      }
+    // 🔥 เช็คซ้ำในกะเดียวกัน
+    const isDuplicateInSameShift = existingItems?.some((item) => {
+      return getShiftDateKey(item.created_at) === currentShiftDate;
+    });
 
-      // 🔹 กันยิงซ้ำ local
-      if (!editing && isDuplicateScan(barcode)) return;
+    // 🔥 เช็คว่าเป็น record เดิมที่กำลัง edit อยู่ไหม
+    const isEditingSameItem = editing
+      ? existingItems?.some((i) => i.id === editing.id)
+      : false;
 
-      let affectedId = "";
-
-      if (editing) {
-        await supabase
-          .from("items")
-          .update({
-            barcode,
-            category_code: categoryCode,
-            weight,
-          })
-          .eq("id", editing.id);
-
-        affectedId = editing.id;
-        setEditing(null);
-      } else {
-        const { data } = await supabase
-          .from("items")
-          .insert({
-            barcode,
-            category_code: categoryCode,
-            weight,
-          })
-          .select()
-          .single();
-
-        affectedId = data?.id || "";
-      }
+    // ❌ ซ้ำในกะเดียวกัน และไม่ใช่ตัวเดิม
+    if (isDuplicateInSameShift && !isEditingSameItem) {
+      alert("❌ Barcode ซ้ำในกะนี้");
 
       setBarcode("");
-      await loadData();
+      inputRef.current?.focus();
 
-      // highlight
-      setHighlightId(affectedId);
-      setTimeout(() => setHighlightId(null), 2000);
-
-      setStatus("success");
-      setTimeout(() => setStatus("idle"), 1000);
-    } catch (err) {
-      console.error(err);
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 1000);
+      return;
     }
-  };
+
+    // 🔥 กันยิงซ้ำเร็ว
+    if (!editing && isDuplicateScan(barcode)) return;
+
+    let affectedId = "";
+
+    // 🔹 UPDATE
+    if (editing) {
+      const { error: updateError } = await supabase
+        .from("items")
+        .update({
+          barcode,
+          category_code: categoryCode,
+          weight,
+        })
+        .eq("id", editing.id);
+
+      if (updateError) throw updateError;
+
+      affectedId = editing.id;
+      setEditing(null);
+    } 
+    // 🔹 INSERT
+    else {
+      const shiftDate = getCurrentShiftDate(); // 🔥 ต้องมี
+
+      const { data, error: insertError } = await supabase
+        .from("items")
+        .insert({
+          barcode,
+          category_code: categoryCode,
+          weight,
+          shift_date: shiftDate, // ✅ สำคัญมาก
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      affectedId = data?.id || "";
+    }
+
+    // 🔹 reset input
+    setBarcode("");
+    inputRef.current?.focus();
+
+    // 🔹 reload data
+    await loadData();
+
+    // 🔥 highlight
+    setHighlightId(affectedId);
+    setTimeout(() => setHighlightId(null), 2000);
+
+    setStatus("success");
+    setTimeout(() => setStatus("idle"), 1000);
+
+  } catch (err: any) {
+    console.log("ERROR FULL:", err);
+    console.log("ERROR KEYS:", Object.keys(err || {}));
+
+    let msg = "❌ เกิดข้อผิดพลาด";
+
+    if (err?.message) msg = err.message;
+    else if (err?.error_description) msg = err.error_description;
+    else if (typeof err === "string") msg = err;
+
+    alert(msg);
+
+    setStatus("error");
+    setTimeout(() => setStatus("idle"), 1000);
+  }
+};
 
   // 🔹 delete
   const handleDelete = async (item: Item) => {
@@ -305,14 +417,14 @@ export default function ScanPage() {
       i.barcode.toLowerCase().includes(k) ||
       getCategoryName(i.category_code).toLowerCase().includes(k);
 
-    const itemTime = new Date(i.created_at).getTime();
+    const itemShift = getShiftDateKey(i.created_at);
 
-    const from = fromDateTime ? new Date(fromDateTime).getTime() : null;
-    const to = toDateTime ? new Date(toDateTime).getTime() : null;
+    const from = fromDateTime || null;
+    const to = toDateTime || null;
 
     const matchDate =
-      (!from || itemTime >= from) &&
-      (!to || itemTime <= to);
+      (!from || itemShift >= from) &&
+      (!to || itemShift <= to);
 
     return matchText && matchDate;
   });
@@ -337,6 +449,7 @@ export default function ScanPage() {
       Barcode: item.barcode,
       Category: getCategoryName(item.category_code),
       Weight: item.weight,
+      ShiftDate: getShiftDate(item.created_at),
       Date: formatDateTime(item.created_at),
     }));
 
@@ -457,14 +570,14 @@ export default function ScanPage() {
         {/* DATE FILTER */}
         <div className="px-2 sm:px-4 pb-2 flex flex-col sm:flex-row gap-2">
           <input
-            type="datetime-local"
+            type="date"
             value={fromDateTime}
             onChange={(e) => setFromDateTime(e.target.value)}
             className="p-2 border rounded-xl text-sm"
           />
 
           <input
-            type="datetime-local"
+            type="date"
             value={toDateTime}
             onChange={(e) => setToDateTime(e.target.value)}
             className="p-2 border rounded-xl text-sm"
@@ -491,14 +604,14 @@ export default function ScanPage() {
                 i.barcode.toLowerCase().includes(k) ||
                 getCategoryName(i.category_code).toLowerCase().includes(k);
 
-              const itemTime = new Date(i.created_at).getTime();
+              const itemShift = getShiftDateKey(i.created_at);
 
-              const from = fromDateTime ? new Date(fromDateTime).getTime() : null;
-              const to = toDateTime ? new Date(toDateTime).getTime() : null;
+              const from = fromDateTime || null;
+              const to = toDateTime || null;
 
               const matchDate =
-                (!from || itemTime >= from) &&
-                (!to || itemTime <= to);
+                (!from || itemShift >= from) &&
+                (!to || itemShift <= to);
 
               return matchText && matchDate;
             });
@@ -506,6 +619,7 @@ export default function ScanPage() {
             const totalWeight = filteredItems
               .reduce((sum, i) => sum + i.weight, 0)
               .toFixed(3);
+
             const totalCount = filteredItems.length;
 
             return (
@@ -543,10 +657,11 @@ export default function ScanPage() {
         <div className="bg-white rounded-2xl shadow overflow-hidden">
 
           {/* HEADER TABLE (desktop only) */}
-          <div className="hidden sm:grid grid-cols-[50px_1fr_120px_120px_auto] p-3 text-sm font-semibold border-b bg-gray-50">
+          <div className="hidden sm:grid grid-cols-[50px_1fr_120px_120px_120px_auto] p-3 text-sm font-semibold border-b bg-gray-50">
             <span>No.</span>
             <span>สินค้า</span>
             <span>Weight</span>
+            <span>Shift Date</span> {/* 👈 เพิ่ม */}
             <span>รับเข้า</span>
             <span className="text-right">
               {isEditMode ? "Actions" : ""}
@@ -570,7 +685,7 @@ export default function ScanPage() {
                       y: 0,
                       scale: isEditing ? 1.02 : 1,
                     }}
-                    className={`flex flex-col sm:grid sm:grid-cols-[50px_1fr_120px_120px_auto]
+                    className={`flex flex-col sm:grid sm:grid-cols-[50px_1fr_120px_120px_120px_auto]
                     gap-1 sm:gap-0 items-start sm:items-center
                     p-2 mx-2 rounded-xl border
                     ${
@@ -599,6 +714,10 @@ export default function ScanPage() {
                     {/* Weight */}
                     <span className="text-blue-700 font-bold text-sm sm:text-base">
                       {item.weight.toFixed(3)}
+                    </span>
+
+                    <span className="text-sm">
+                      {new Date(item.shift_date).toLocaleDateString("th-TH")}
                     </span>
 
                     {/* Date */}
