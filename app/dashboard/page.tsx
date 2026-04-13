@@ -358,8 +358,10 @@ useEffect(() => {
                   tickFormatter={formatShiftDateDisplay}
                 />
                 <YAxis />
-                <Tooltip 
-                  labelFormatter={formatShiftDateDisplay}
+                <Tooltip
+                  labelFormatter={(label) =>
+                    formatShiftDateDisplay(label as string)
+                  }
                   formatter={(value: number) => value.toFixed(3)}
                 />
                 <Line type="monotone" dataKey="weight" stroke="#3b82f6" />
