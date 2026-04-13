@@ -58,7 +58,7 @@ export default function DashboardPage() {
   }, []);
 
   // =========================
-  // 🔥 MAP (เร็วกว่า find)
+  // 🔥 MAP
   // =========================
   const categoryMap = Object.fromEntries(
     categories.map((c) => [c.code, c.name])
@@ -67,6 +67,61 @@ export default function DashboardPage() {
   const getCategoryName = (code: string) => {
     return categoryMap[code] || code;
   };
+
+  // =========================
+// 🔥 SHIFT DATE (FIX TIMEZONE)
+// =========================
+const getShiftDate = (date: string) => {
+  const thai = new Date(
+    new Date(date).toLocaleString("en-US", {
+      timeZone: "Asia/Bangkok",
+    })
+  );
+
+  if (thai.getHours() >= 22) {
+    thai.setDate(thai.getDate() + 1);
+  }
+
+  // ❌ ห้ามใช้ toISOString
+  // ✅ ใช้ local string แทน
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return `${thai.getFullYear()}-${pad(
+    thai.getMonth() + 1
+  )}-${pad(thai.getDate())}`;
+};
+
+// =========================
+// 🔥 DEFAULT SHIFT TODAY
+// =========================
+useEffect(() => {
+  const shiftToday = getShiftDate(new Date().toISOString());
+
+  const start = new Date(`${shiftToday}T22:00`);
+  start.setDate(start.getDate() - 1);
+
+  const end = new Date(`${shiftToday}T21:59`);
+
+  // ✅ FIX: format ให้เป็นเวลาไทย
+  const formatLocal = (d: Date) => {
+    const thai = new Date(
+      d.toLocaleString("en-US", {
+        timeZone: "Asia/Bangkok",
+      })
+    );
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+
+    return `${thai.getFullYear()}-${pad(
+      thai.getMonth() + 1
+    )}-${pad(thai.getDate())}T${pad(thai.getHours())}:${pad(
+      thai.getMinutes()
+    )}`;
+  };
+
+  setFromDateTime(formatLocal(start));
+  setToDateTime(formatLocal(end));
+}, []);
 
   // =========================
   // FILTER
@@ -128,15 +183,22 @@ export default function DashboardPage() {
     Math.max(...categorySummary.map((c) => c.weight), 1);
 
   // =========================
-  // CHART
+  // 🔥 CHART (แก้ตรงนี้)
   // =========================
+  const formatShiftDateDisplay = (date: string) => {
+  const d = new Date(date);
+
+  return d.toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
   const chartData = (() => {
     const map: Record<string, number> = {};
 
     filteredItems.forEach((i) => {
-      const d = new Date(i.created_at)
-        .toISOString()
-        .slice(0, 10);
+      const d = getShiftDate(i.created_at); // ✅ ใช้ shift
 
       map[d] = (map[d] || 0) + i.weight;
     });
@@ -150,16 +212,44 @@ export default function DashboardPage() {
   })();
 
   // =========================
-  // EXPORT
+  // 🔥 EXPORT excel
   // =========================
   const exportExcel = () => {
-    const data = filteredItems.map((i, index) => ({
-      ลำดับ: index + 1,
-      ประเภท: getCategoryName(i.category_code),
-      น้ำหนัก: i.weight,
-      barcode: i.barcode,
-      วันที่: new Date(i.created_at).toLocaleString(),
-    }));
+    const data = filteredItems.map((i, index) => {
+      // 👉 เวลาไทย
+      const thai = new Date(
+        new Date(i.created_at).toLocaleString("en-US", {
+          timeZone: "Asia/Bangkok",
+        })
+      );
+
+      // 👉 created_date (วัน+เวลา)
+      const createdDate = thai.toLocaleString("th-TH");
+
+      // 👉 shift date logic
+      const shift = new Date(thai);
+      if (shift.getHours() >= 22) {
+        shift.setDate(shift.getDate() + 1);
+      }
+
+      // 👉 format 8/04/2024
+      const shiftDate = shift.toLocaleDateString("th-TH", {
+        day: "numeric",     // 8
+        month: "2-digit",   // 04
+        year: "numeric",    // 2024
+      });
+
+      return {
+        ลำดับ: index + 1,
+        ประเภท: getCategoryName(i.category_code),
+        น้ำหนัก: i.weight,
+        barcode: i.barcode,
+
+        // 🔥 เพิ่ม 2 ช่องนี้
+        created_date: createdDate,
+        shiftdate: shiftDate,
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -263,9 +353,15 @@ export default function DashboardPage() {
           <div className="w-full h-64">
             <ResponsiveContainer>
               <LineChart data={chartData}>
-                <XAxis dataKey="date" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatShiftDateDisplay}
+                />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  labelFormatter={formatShiftDateDisplay}
+                  formatter={(value: number) => value.toFixed(3)}
+                />
                 <Line type="monotone" dataKey="weight" stroke="#3b82f6" />
               </LineChart>
             </ResponsiveContainer>

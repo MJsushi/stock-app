@@ -35,23 +35,25 @@ export default function ScanPage() {
   const [fromDateTime, setFromDateTime] = useState("");
   const [toDateTime, setToDateTime] = useState("");
 
-  // เวลาทำงานกะ
   const getShiftDate = (date: string) => {
-    const d = new Date(date);
+    // 👉 แปลงเป็นเวลาไทยครั้งเดียว
+    const thai = new Date(
+      new Date(date).toLocaleString("en-US", {
+        timeZone: "Asia/Bangkok",
+      })
+    );
 
-    // เอาเวลาไทย
-    const hours = new Date(
-      d.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-    ).getHours();
-
-    // ถ้าเวลา >= 22 ให้ +1 วัน
-    if (hours >= 22) {
-      d.setDate(d.getDate() + 1);
+    // 👉 เช็คชั่วโมง (ไทย)
+    if (thai.getHours() >= 22) {
+      thai.setDate(thai.getDate() + 1);
     }
 
-    return new Date(
-      d.toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
-    ).toLocaleDateString("th-TH");
+    // 👉 format ไทย
+    return thai.toLocaleDateString("th-TH", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
   };
   
   //จำนวนแสดงผลต่อหน้า
@@ -449,7 +451,7 @@ export default function ScanPage() {
       Barcode: item.barcode,
       Category: getCategoryName(item.category_code),
       Weight: item.weight,
-      ShiftDate: getShiftDate(item.created_at),
+      ShiftDate: new Date(item.shift_date).toLocaleDateString("th-TH"),
       Date: formatDateTime(item.created_at),
     }));
 
