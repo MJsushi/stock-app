@@ -362,7 +362,12 @@ useEffect(() => {
                   labelFormatter={(label) =>
                     formatShiftDateDisplay(label as string)
                   }
-                  formatter={(value: number) => value.toFixed(3)}
+                  formatter={(value: any) => {
+                    if (typeof value === "number") {
+                      return [value.toFixed(3), "น้ำหนัก (kg)"];
+                    }
+                    return [value, ""];
+                  }}
                 />
                 <Line type="monotone" dataKey="weight" stroke="#3b82f6" />
               </LineChart>
