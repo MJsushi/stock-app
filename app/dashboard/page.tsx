@@ -297,6 +297,12 @@ useEffect(() => {
             >
               Scan
             </Link>
+            <Link
+              href="/suppliers"
+              className="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs"
+            >
+              Suppliers
+            </Link>
 
             <button
               onClick={exportExcel}

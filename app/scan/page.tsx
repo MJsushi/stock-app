@@ -26,8 +26,7 @@ export default function ScanPage() {
   const [barcode, setBarcode] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-
+  
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Item | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -35,27 +34,6 @@ export default function ScanPage() {
   const [fromDateTime, setFromDateTime] = useState("");
   const [toDateTime, setToDateTime] = useState("");
 
-  const getShiftDate = (date: string) => {
-    // 👉 แปลงเป็นเวลาไทยครั้งเดียว
-    const thai = new Date(
-      new Date(date).toLocaleString("en-US", {
-        timeZone: "Asia/Bangkok",
-      })
-    );
-
-    // 👉 เช็คชั่วโมง (ไทย)
-    if (thai.getHours() >= 22) {
-      thai.setDate(thai.getDate() + 1);
-    }
-
-    // 👉 format ไทย
-    return thai.toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  };
-  
   //จำนวนแสดงผลต่อหน้า
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20; // ปรับได้ตามต้องการ
@@ -495,6 +473,12 @@ export default function ScanPage() {
               className="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs"
             >
               📊 Dashboard
+            </Link>
+            <Link
+              href="/inbound"
+              className="bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs"
+            >
+              📥 Inbound
             </Link>
             <Link
               href="/categories"
