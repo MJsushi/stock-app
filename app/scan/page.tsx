@@ -34,6 +34,8 @@ export default function ScanPage() {
   const [fromDateTime, setFromDateTime] = useState("");
   const [toDateTime, setToDateTime] = useState("");
 
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+
   //จำนวนแสดงผลต่อหน้า
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20; // ปรับได้ตามต้องการ
@@ -252,7 +254,7 @@ export default function ScanPage() {
   const handleSave = async () => {
   if (!barcode) return;
 
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  
   const errorMsg = validateBarcode(barcode);
 
   if (errorMsg) {
