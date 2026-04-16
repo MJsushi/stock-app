@@ -252,6 +252,7 @@ export default function ScanPage() {
   const handleSave = async () => {
   if (!barcode) return;
 
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const errorMsg = validateBarcode(barcode);
 
   if (errorMsg) {
