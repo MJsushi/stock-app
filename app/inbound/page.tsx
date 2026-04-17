@@ -159,22 +159,40 @@ export default function InboundPage() {
     setCurrentShiftReceive(data?.receive_weight ?? null);
   };
 
+  // ✅ เพิ่ม state
+  const [isEditingReceive, setIsEditingReceive] = useState(false);
+
+  // =====================
+  // SAVE RECEIVE (FIX: UPSERT + EDIT MODE)
+  // =====================
   const saveReceiveWeight = async () => {
     if (!supplierId) return;
 
-    const shiftDate = editShiftDate || getShiftDate(); // 👈 ใช้ตัวที่กดมา
+    const shiftDate = editShiftDate || getShiftDate();
     const w = parseFloat(receiveWeight);
 
     if (isNaN(w)) return;
 
-    await supabase
+    const { error } = await supabase
       .from("shift_summaries")
-      .update({
-        receive_weight: w,
-      })
-      .eq("shift_date", shiftDate)
-      .eq("supplier_id", supplierId)
-      .eq("type", type);
+      .upsert(
+        [
+          {
+            shift_date: shiftDate,
+            supplier_id: supplierId,
+            type,
+            receive_weight: w,
+          },
+        ],
+        {
+          onConflict: "shift_date,supplier_id,type",
+        }
+      );
+
+    if (error) {
+      console.error("save error:", error);
+      return;
+    }
 
     const key = `${shiftDate}-${supplierId}-${type}`;
 
@@ -185,7 +203,10 @@ export default function InboundPage() {
 
     setCurrentShiftReceive(w);
     setReceiveWeight("");
-    setEditShiftDate(null); // 👈 reset
+    setEditShiftDate(null);
+
+    // ✅ reset edit mode
+    setIsEditingReceive(false);
   };
 
   // =====================
@@ -429,7 +450,7 @@ export default function InboundPage() {
         </div>
 
         {/* กรอกน้ำหนักรับเข้า */}
-        {!currentShiftReceive && (
+        {(currentShiftReceive === null || isEditingReceive) && (
           <div className="bg-white p-4 rounded-xl shadow mb-3 space-y-2">
             <div className="text-sm font-semibold">🚚 น้ำหนักรับเข้า (ทั้งคัน)</div>
 
@@ -515,21 +536,24 @@ export default function InboundPage() {
                   <div
                     className="text-blue-600 cursor-pointer"
                     onClick={(e) => {
-  e.stopPropagation();
+                      e.stopPropagation();
 
-  const parts = s.key.split("-");
-  const shiftDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
-  const sid = Number(parts[3]);
-  const t = parts[4];
+                      const parts = s.key.split("-");
+                      const shiftDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+                      const sid = Number(parts[3]);
+                      const t = parts[4];
 
-  setSupplierId(sid);
-  setType(t);
-  setReceiveWeight(String(s.receive || ""));
+                      setSupplierId(sid);
+                      setType(t);
+                      setReceiveWeight(String(s.receive || ""));
 
-  setEditShiftDate(shiftDate); // 👈 ใส่เพิ่มตรงนี้
+                      setEditShiftDate(shiftDate);
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}}
+                      // ✅ เพิ่มบรรทัดนี้
+                      setIsEditingReceive(true);
+
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                   >
                     {s.receive?.toFixed(3) || "-"}
                   </div>
