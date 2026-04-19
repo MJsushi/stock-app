@@ -71,7 +71,7 @@ export default function InboundPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 50;
+  const ITEMS_PER_PAGE = 50;//กำหนดแสดงผลต่อหน้า
 
   const [receiveWeight, setReceiveWeight] = useState("");
   const [editShiftDate, setEditShiftDate] = useState<string | null>(null);
@@ -595,7 +595,7 @@ export default function InboundPage() {
 
         {/* LIST */}
         <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <div className="space-y-1 p-2 max-h-[70vh] overflow-y-auto">
+          <div className="space-y-1 p-2 max-h-fit overflow-y-auto">
 
             {/* HEADER */}
             <div className="hidden sm:grid grid-cols-[80px_1fr_1fr_120px_140px_140px_20px] p-3 text-sm font-semibold border-b bg-gray-50">
@@ -621,13 +621,14 @@ export default function InboundPage() {
                 key={l.id}
                 onClick={() => handleEdit(l)}
                 className={`cursor-pointer flex flex-col sm:grid sm:grid-cols-[80px_1fr_1fr_120px_140px_140px_20px]
-                  p-3 rounded-xl border transition
+                  p-1 rounded-xl border transition
+                  hover:bg-gray-100 hover:border-gray-300
                   ${
                     editingId === l.id
                       ? "bg-yellow-100 border-yellow-400"
                       : highlightId === l.id
                       ? "bg-green-100 border-green-400"
-                      : "bg-gray-50 border-gray-100"
+                      : "bg-gray-50 border-gray-100 hover:bg-gray-100 hover:border-gray-300"
                   }`}
               >
                 {/* ลำดับ */}
