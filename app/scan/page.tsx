@@ -77,45 +77,62 @@ export default function ScanPage() {
     useEffect(() => {
       const startScanner = async () => {
         const el = document.getElementById("reader");
-
-        // ❌ ยังไม่มี div → ไม่ต้อง start
         if (!el) return;
 
         const scanner = new Html5Qrcode("reader");
         scannerRef.current = scanner;
 
-        let isScanning = true;
-
         try {
           await scanner.start(
             { facingMode: "environment" },
             {
-              fps: 20,
-              qrbox: { width: 300, height: 120 },
+              fps: 25,
+
+              // 🔥 ปรับให้ "1D สแกนง่ายขึ้น"
+              qrbox: { width: 320, height: 120 },
+
+              // 🔥 ลด jitter + เพิ่มความนิ่ง
               aspectRatio: 1.7778,
-              
+
+              // 🔥 สำคัญมาก: ช่วยให้ decode ไวขึ้น
+              disableFlip: true,
             },
             async (decodedText) => {
               if (isDuplicateScan(decodedText)) return;
+
+              // 🔥 กัน double fire
+              scanner.pause?.(true);
+
               await handleSaveFromScan(decodedText);
+
+              // 🔥 ยิงเสร็จค่อยกลับมาสแกนต่อ
+              setTimeout(() => {
+                scanner.resume?.();
+              }, 300);
             },
             (errorMessage) => {
-              // optional: จะ log หรือไม่ก็ได้
-              // console.log("scan error:", errorMessage);
+              // ignore
             }
           );
+
+          // 🔥 FIX: ล็อกกลาง + ลด shake (บาง browser รองรับ)
+          const video = document.querySelector("video");
+          if (video) {
+            video.style.objectFit = "cover";
+            video.style.transform = "scale(1.05)";
+          }
         } catch (err) {
           console.error("START ERROR:", err);
         }
 
         return () => {
-          isScanning = false;
           scanner.stop().catch(() => {});
+          scanner.clear?.();
         };
       };
 
       startScanner();
-    }, []); 
+    }, []);
 
 
 
@@ -602,8 +619,16 @@ export default function ScanPage() {
           )}
         </div>
         {/* 📷 SCANNER */}
-        <div className="bg-white p-3 rounded-xl shadow mb-3">
-        <div id="reader" className="w-full max-w-sm mx-auto rounded-xl overflow-hidden" />
+        <div className="relative bg-black rounded-xl p-2 overflow-hidden">
+          {/* 🔥 LASER GUIDE */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-[85%] h-[2px] bg-red-500 opacity-70 animate-pulse" />
+          </div>
+          {/* 🔥 CENTER FRAME */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-[85%] h-[120px] border-2 border-green-400 rounded-lg opacity-70" />
+          </div>
+          <div id="reader" className="w-full max-w-sm mx-auto rounded-xl overflow-hidden" />
         </div>
 
         {/* SEARCH */}
