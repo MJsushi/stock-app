@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { Html5Qrcode } from "html5-qrcode";
 
 type Item = {
   id: string;
@@ -66,11 +67,59 @@ export default function ScanPage() {
   const lastScanRef = useRef("");
   const lastTimeRef = useRef(0);
   const editingRef = useRef<HTMLDivElement | null>(null);
-
   const inputRef = useRef<HTMLInputElement>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
     useEffect(() => {
       inputRef.current?.focus();
     }, []);
+  
+
+    useEffect(() => {
+      const startScanner = async () => {
+        const el = document.getElementById("reader");
+
+        // ❌ ยังไม่มี div → ไม่ต้อง start
+        if (!el) return;
+
+        const scanner = new Html5Qrcode("reader");
+        scannerRef.current = scanner;
+
+        let isScanning = true;
+
+        try {
+          await scanner.start(
+            { facingMode: "environment" },
+            {
+              fps: 20,
+              qrbox: { width: 300, height: 120 },
+              aspectRatio: 1.7778,
+              
+            },
+            async (decodedText) => {
+              if (isDuplicateScan(decodedText)) return;
+              await handleSaveFromScan(decodedText);
+            },
+            (errorMessage) => {
+              // optional: จะ log หรือไม่ก็ได้
+              // console.log("scan error:", errorMessage);
+            }
+          );
+        } catch (err) {
+          console.error("START ERROR:", err);
+        }
+
+        return () => {
+          isScanning = false;
+          scanner.stop().catch(() => {});
+        };
+      };
+
+      startScanner();
+    }, []); 
+
+
+
+
 
   const formatDateTime = (date: string) => {
     const d = new Date(date);
@@ -252,132 +301,139 @@ export default function ScanPage() {
 
   // 🔥 save
   const handleSave = async () => {
-  if (!barcode) return;
+    if (!barcode) return;
 
-  
-  const errorMsg = validateBarcode(barcode);
+    
+    const errorMsg = validateBarcode(barcode);
 
-  if (errorMsg) {
-    alert(errorMsg);
-    setStatus("error");
-    setBarcode("");
-    inputRef.current?.focus();
-    setTimeout(() => setStatus("idle"), 1200);
-    return;
-  }
-
-  try {
-    const parsed = parseBarcode(barcode);
-    const categoryCode = parsed.categoryCode;
-    const weight = parsed.weight;
-
-    if (!isValidCategory(categoryCode)) {
-      alert("❌ ไม่พบหมวดหมู่");
+    if (errorMsg) {
+      alert(errorMsg);
+      setStatus("error");
+      setBarcode("");
+      inputRef.current?.focus();
+      setTimeout(() => setStatus("idle"), 1200);
       return;
     }
 
-    // 🔥 shift ปัจจุบัน
-    const currentShiftDate = getShiftDateKey(new Date().toISOString());
+    try {
+      const parsed = parseBarcode(barcode);
+      const categoryCode = parsed.categoryCode;
+      const weight = parsed.weight;
 
-    // 🔥 query barcode เดียวกันทั้งหมด
-    const { data: existingItems, error: fetchError } = await supabase
-      .from("items")
-      .select("id, created_at")
-      .eq("barcode", barcode);
+      if (!isValidCategory(categoryCode)) {
+        alert("❌ ไม่พบหมวดหมู่");
+        return;
+      }
 
-    if (fetchError) throw fetchError;
+      // 🔥 shift ปัจจุบัน
+      const currentShiftDate = getShiftDateKey(new Date().toISOString());
 
-    // 🔥 เช็คซ้ำในกะเดียวกัน
-    const isDuplicateInSameShift = existingItems?.some((item) => {
-      return getShiftDateKey(item.created_at) === currentShiftDate;
-    });
+      // 🔥 query barcode เดียวกันทั้งหมด
+      const { data: existingItems, error: fetchError } = await supabase
+        .from("items")
+        .select("id, created_at")
+        .eq("barcode", barcode);
 
-    // 🔥 เช็คว่าเป็น record เดิมที่กำลัง edit อยู่ไหม
-    const isEditingSameItem = editing
-      ? existingItems?.some((i) => i.id === editing.id)
-      : false;
+      if (fetchError) throw fetchError;
 
-    // ❌ ซ้ำในกะเดียวกัน และไม่ใช่ตัวเดิม
-    if (isDuplicateInSameShift && !isEditingSameItem) {
-      alert("❌ Barcode ซ้ำในกะนี้");
+      // 🔥 เช็คซ้ำในกะเดียวกัน
+      const isDuplicateInSameShift = existingItems?.some((item) => {
+        return getShiftDateKey(item.created_at) === currentShiftDate;
+      });
 
+      // 🔥 เช็คว่าเป็น record เดิมที่กำลัง edit อยู่ไหม
+      const isEditingSameItem = editing
+        ? existingItems?.some((i) => i.id === editing.id)
+        : false;
+
+      // ❌ ซ้ำในกะเดียวกัน และไม่ใช่ตัวเดิม
+      if (isDuplicateInSameShift && !isEditingSameItem) {
+        alert("❌ Barcode ซ้ำในกะนี้");
+
+        setBarcode("");
+        inputRef.current?.focus();
+
+        return;
+      }
+
+      // 🔥 กันยิงซ้ำเร็ว
+      if (!editing && isDuplicateScan(barcode)) return;
+
+      let affectedId = "";
+
+      // 🔹 UPDATE
+      if (editing) {
+        const { error: updateError } = await supabase
+          .from("items")
+          .update({
+            barcode,
+            category_code: categoryCode,
+            weight,
+          })
+          .eq("id", editing.id);
+
+        if (updateError) throw updateError;
+
+        affectedId = editing.id;
+        setEditing(null);
+      } 
+      // 🔹 INSERT
+      else {
+        const shiftDate = getCurrentShiftDate(); // 🔥 ต้องมี
+
+        const { data, error: insertError } = await supabase
+          .from("items")
+          .insert({
+            barcode,
+            category_code: categoryCode,
+            weight,
+            shift_date: shiftDate, // ✅ สำคัญมาก
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        affectedId = data?.id || "";
+      }
+
+      // 🔹 reset input
       setBarcode("");
       inputRef.current?.focus();
 
-      return;
+      // 🔹 reload data
+      await loadData();
+
+      // 🔥 highlight
+      setHighlightId(affectedId);
+      setTimeout(() => setHighlightId(null), 2000);
+
+      setStatus("success");
+      setTimeout(() => setStatus("idle"), 1000);
+
+    } catch (err: any) {
+      console.log("ERROR FULL:", err);
+      console.log("ERROR KEYS:", Object.keys(err || {}));
+
+      let msg = "❌ เกิดข้อผิดพลาด";
+
+      if (err?.message) msg = err.message;
+      else if (err?.error_description) msg = err.error_description;
+      else if (typeof err === "string") msg = err;
+
+      alert(msg);
+
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 1000);
     }
+  };
+  const handleSaveFromScan = async (code: string) => {
+    setBarcode(code);
+    setTimeout(() => {
+      handleSave();
+    }, 50);
 
-    // 🔥 กันยิงซ้ำเร็ว
-    if (!editing && isDuplicateScan(barcode)) return;
-
-    let affectedId = "";
-
-    // 🔹 UPDATE
-    if (editing) {
-      const { error: updateError } = await supabase
-        .from("items")
-        .update({
-          barcode,
-          category_code: categoryCode,
-          weight,
-        })
-        .eq("id", editing.id);
-
-      if (updateError) throw updateError;
-
-      affectedId = editing.id;
-      setEditing(null);
-    } 
-    // 🔹 INSERT
-    else {
-      const shiftDate = getCurrentShiftDate(); // 🔥 ต้องมี
-
-      const { data, error: insertError } = await supabase
-        .from("items")
-        .insert({
-          barcode,
-          category_code: categoryCode,
-          weight,
-          shift_date: shiftDate, // ✅ สำคัญมาก
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      affectedId = data?.id || "";
-    }
-
-    // 🔹 reset input
-    setBarcode("");
-    inputRef.current?.focus();
-
-    // 🔹 reload data
-    await loadData();
-
-    // 🔥 highlight
-    setHighlightId(affectedId);
-    setTimeout(() => setHighlightId(null), 2000);
-
-    setStatus("success");
-    setTimeout(() => setStatus("idle"), 1000);
-
-  } catch (err: any) {
-    console.log("ERROR FULL:", err);
-    console.log("ERROR KEYS:", Object.keys(err || {}));
-
-    let msg = "❌ เกิดข้อผิดพลาด";
-
-    if (err?.message) msg = err.message;
-    else if (err?.error_description) msg = err.error_description;
-    else if (typeof err === "string") msg = err;
-
-    alert(msg);
-
-    setStatus("error");
-    setTimeout(() => setStatus("idle"), 1000);
-  }
-};
+  };
 
   // 🔹 delete
   const handleDelete = async (item: Item) => {
@@ -544,6 +600,10 @@ export default function ScanPage() {
               )}
             </div>
           )}
+        </div>
+        {/* 📷 SCANNER */}
+        <div className="bg-white p-3 rounded-xl shadow mb-3">
+        <div id="reader" className="w-full max-w-sm mx-auto rounded-xl overflow-hidden" />
         </div>
 
         {/* SEARCH */}
