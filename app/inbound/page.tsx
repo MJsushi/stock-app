@@ -71,7 +71,7 @@ export default function InboundPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 50;//กำหนดแสดงผลต่อหน้า
+  const ITEMS_PER_PAGE = 40;//กำหนดแสดงผลต่อหน้า
 
   const [receiveWeight, setReceiveWeight] = useState("");
   const [editShiftDate, setEditShiftDate] = useState<string | null>(null);
@@ -351,9 +351,21 @@ export default function InboundPage() {
   });
 
   const sortedLots = [...filteredLots].sort((a, b) => {
-    const aT = new Date(a.created_at || "").getTime();
-    const bT = new Date(b.created_at || "").getTime();
-    return sortOrder === "asc" ? aT - bT : bT - aT;
+    // 🔹 ใช้ shift_date เป็นหลัก
+    const aDate = new Date(a.shift_date || "").getTime();
+    const bDate = new Date(b.shift_date || "").getTime();
+
+    if (aDate !== bDate) {
+      return sortOrder === "asc" ? aDate - bDate : bDate - aDate;
+    }
+
+    // 🔹 ภายในวันเดียวกัน → เรียงตาม TYPES
+    const typeOrder = TYPES.map((t) => t.code);
+
+    const aIndex = typeOrder.indexOf(a.type || "");
+    const bIndex = typeOrder.indexOf(b.type || "");
+
+    return aIndex - bIndex;
   });
 
   const summary: Record<string, number> = {};
@@ -376,17 +388,54 @@ export default function InboundPage() {
     };
   });
 
-  const totalPages = Math.ceil(sortedLots.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(sortedLots.length / ITEMS_PER_PAGE));
 
   const paginatedLots = sortedLots.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
+  // reset ตอน filter เปลี่ยน
   useEffect(() => {
     setCurrentPage(1);
-  }, [filteredLots]);
+  }, [search, filterSupplier, filterType, filterDate]);
 
+  // reset ตอน sort เปลี่ยน
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sortOrder]);
+
+  // สี diff
+  const renderValue = (
+    n?: number,
+    options?: {
+      unit?: string;      // " kg" | "%"
+      decimals?: number;  // 3 สำหรับ kg, 2 สำหรับ %
+    }
+  ) => {
+    if (typeof n !== "number") return "-";
+
+    const { unit = "", decimals = 3 } = options || {};
+
+    // 🔹 แปลงค่า: บวก(หาย) → แสดงลบ, ลบ(เกิน) → แสดงบวก
+    const displayValue = n > 0 ? -n : Math.abs(n);
+
+    const formatted = displayValue.toLocaleString("en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+
+    // 🔹 สีตามความหมายจริง (ไม่ใช่ค่าที่แสดง)
+    const color =
+      n > 0 ? "text-red-600" : n < 0 ? "text-green-600" : "text-gray-500";
+
+    return (
+      <span className={`font-semibold ${color}`}>
+        {formatted}
+        {unit}
+      </span>
+    );
+  };
   
   return (
     <div className="min-h-screen bg-linear-to-t from-gray-100 to-gray-200 p-2 sm:p-4 text-gray-900">
@@ -555,36 +604,28 @@ export default function InboundPage() {
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                   >
-                    {s.receive?.toFixed(3) || "-"}
+                    {s.receive?.toLocaleString("en-US", {
+                      minimumFractionDigits: 3,
+                      maximumFractionDigits: 3,
+                    }) ?? "-"}
                   </div>
 
                   <div>
                     ชั่งรวม:{" "}
                     <span className="font-semibold">
-                      {s.total.toFixed(3)}
+                      {s.total.toLocaleString("en-US", {
+                        minimumFractionDigits: 3,
+                        maximumFractionDigits: 3,
+                      })}
                     </span>
                   </div>
 
                   <div>
-                    หาย:{" "}
-                    <span
-                      className={`font-semibold ${
-                        s.diff > 0 ? "text-red-600" : "text-green-600"
-                      }`}
-                    >
-                      {s.diff.toFixed(3)} kg
-                    </span>
+                    หาย: {renderValue(s.diff, { unit: " kg", decimals: 3 })}
                   </div>
 
                   <div>
-                    %:{" "}
-                    <span
-                      className={`font-semibold ${
-                        s.percent > 0 ? "text-red-600" : "text-green-600"
-                      }`}
-                    >
-                      {s.percent.toFixed(2)}%
-                    </span>
+                    %: {renderValue(s.percent, { unit: "%", decimals: 2 })}
                   </div>
                 </div>
               </div>
@@ -608,9 +649,23 @@ export default function InboundPage() {
                 ลำดับที่ {sortOrder === "desc" ? "🔽" : "🔼"}
               </span>
               <span>Batch</span>
-              <span>Supplier-type</span>
+              <span
+                onClick={() =>
+                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+                }
+                className="cursor-pointer select-none"
+              >
+                Supplier-type {sortOrder === "asc" ? "🔼" : "🔽"}
+              </span>
               <span>น้ำหนัก</span>
-              <span>Shift Date</span>
+              <span
+                onClick={() =>
+                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+                }
+                className="cursor-pointer select-none"
+              >
+                Shift Date {sortOrder === "asc" ? "🔼" : "🔽"}
+              </span>
               <span>วันเวลา</span>
               <span></span>
             </div>
