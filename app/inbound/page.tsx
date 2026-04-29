@@ -68,6 +68,7 @@ export default function InboundPage() {
   const [filterType, setFilterType] = useState("");
   const [filterDate, setFilterDate] = useState("");
 
+  const [sortKey, setSortKey] = useState<"date" | "supplier" | "created">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -351,21 +352,49 @@ export default function InboundPage() {
   });
 
   const sortedLots = [...filteredLots].sort((a, b) => {
-    // 🔹 ใช้ shift_date เป็นหลัก
-    const aDate = new Date(a.shift_date || "").getTime();
-    const bDate = new Date(b.shift_date || "").getTime();
+    const dir = sortOrder === "asc" ? 1 : -1;
 
-    if (aDate !== bDate) {
-      return sortOrder === "asc" ? aDate - bDate : bDate - aDate;
-    }
-
-    // 🔹 ภายในวันเดียวกัน → เรียงตาม TYPES
     const typeOrder = TYPES.map((t) => t.code);
 
-    const aIndex = typeOrder.indexOf(a.type || "");
-    const bIndex = typeOrder.indexOf(b.type || "");
+    // 🔹 primary (ตามที่ user กด)
+    let primary = 0;
 
-    return aIndex - bIndex;
+    if (sortKey === "date") {
+      primary =
+        new Date(a.shift_date || "").getTime() -
+        new Date(b.shift_date || "").getTime();
+    }
+
+    if (sortKey === "supplier") {
+      primary = a.supplier_name.localeCompare(b.supplier_name);
+    }
+
+    if (sortKey === "created") {
+      primary =
+        new Date(a.created_at || "").getTime() -
+        new Date(b.created_at || "").getTime();
+    }
+
+    if (primary !== 0) return primary * dir;
+
+    // 🔽 fallback multi-level (เหมือนเดิม)
+    const d =
+      new Date(a.shift_date || "").getTime() -
+      new Date(b.shift_date || "").getTime();
+    if (d !== 0) return d * dir;
+
+    const s = a.supplier_name.localeCompare(b.supplier_name);
+    if (s !== 0) return s * dir;
+
+    const t =
+      typeOrder.indexOf(a.type || "") -
+      typeOrder.indexOf(b.type || "");
+    if (t !== 0) return t * dir;
+
+    return (
+      new Date(a.created_at || "").getTime() -
+      new Date(b.created_at || "").getTime()
+    ) * dir;
   });
 
   const summary: Record<string, number> = {};
@@ -387,6 +416,15 @@ export default function InboundPage() {
       percent: receive ? ((receive - total) / receive) * 100 : 0,
     };
   });
+  const [lossPage, setLossPage] = useState(1);
+  const LOSS_PER_PAGE = 5;
+  const totalLossPages = Math.ceil(shiftLoss.length / LOSS_PER_PAGE);
+  const paginatedLoss = shiftLoss.slice(
+    (lossPage - 1) * LOSS_PER_PAGE,
+    lossPage * LOSS_PER_PAGE
+  );
+
+
 
   const totalPages = Math.max(1, Math.ceil(sortedLots.length / ITEMS_PER_PAGE));
 
@@ -398,12 +436,15 @@ export default function InboundPage() {
   // reset ตอน filter เปลี่ยน
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterSupplier, filterType, filterDate]);
-
-  // reset ตอน sort เปลี่ยน
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [sortOrder]);
+    setLossPage(1); // 🔥 reset Loss ด้วย
+  }, [
+    search,
+    filterSupplier,
+    filterType,
+    filterDate,
+    sortKey,
+    sortOrder,
+  ]);
 
   // สี diff
   const renderValue = (
@@ -556,7 +597,7 @@ export default function InboundPage() {
             <div className="text-gray-400">ไม่มีข้อมูล</div>
           )}
 
-          {shiftLoss.map((s) => {
+          {paginatedLoss.map((s) => {
             // ✅ ดึง lot ตัวอย่างจาก list (ที่ผ่าน filter แล้ว)
             const sampleLot = sortedLots.find(
               (l) =>
@@ -632,7 +673,36 @@ export default function InboundPage() {
             );
           })}
           
+          {totalLossPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-xs text-gray-500">
+                หน้า {lossPage} / {totalLossPages}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setLossPage((p) => Math.max(p - 1, 1))}
+                  disabled={lossPage === 1}
+                  className="px-2 py-1 text-xs rounded bg-gray-100 disabled:opacity-50"
+                >
+                  ก่อนหน้า
+                </button>
+                <button
+                  onClick={() =>
+                    setLossPage((p) =>
+                      Math.min(p + 1, totalLossPages)
+                    )
+                  }
+                  disabled={lossPage === totalLossPages}
+                  className="px-2 py-1 text-xs rounded bg-gray-100 disabled:opacity-50"
+                >
+                  ถัดไป
+                </button>
+              </div>
+            </div>
+          )}
+          
         </div>
+        
 
         {/* LIST */}
         <div className="bg-white rounded-2xl shadow overflow-hidden">
@@ -641,30 +711,48 @@ export default function InboundPage() {
             {/* HEADER */}
             <div className="hidden sm:grid grid-cols-[80px_1fr_1fr_120px_140px_140px_20px] p-3 text-sm font-semibold border-b bg-gray-50">
               <span
-                onClick={() =>
-                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
+                onClick={() => {
+                  setSortKey("created");
+                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+                }}
                 className="cursor-pointer select-none"
               >
-                ลำดับที่ {sortOrder === "desc" ? "🔽" : "🔼"}
+                ลำดับที่ {" "}
+                {sortKey === "created"
+                  ? sortOrder === "asc"
+                    ? "🔼"
+                    : "🔽"
+                  : ""}
               </span>
               <span>Batch</span>
               <span
-                onClick={() =>
-                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
+                onClick={() => {
+                  setSortKey("supplier"); // 🔥 บอกว่า sort ตาม supplier
+                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+                }}
                 className="cursor-pointer select-none"
               >
-                Supplier-type {sortOrder === "asc" ? "🔼" : "🔽"}
+                Supplier-type{" "}
+                {sortKey === "supplier"
+                  ? sortOrder === "asc"
+                    ? "🔼"
+                    : "🔽"
+                  : ""}
               </span>
               <span>น้ำหนัก</span>
               <span
-                onClick={() =>
-                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                }
+                onClick={() => {
+                  setSortKey("date");
+                  setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+                }}
                 className="cursor-pointer select-none"
               >
-                Shift Date {sortOrder === "asc" ? "🔼" : "🔽"}
+                Shift Date{" "}
+                {sortKey === "date"
+                  ? sortOrder === "asc"
+                    ? "🔼"
+                    : "🔽"
+                  : ""}
               </span>
               <span>วันเวลา</span>
               <span></span>
