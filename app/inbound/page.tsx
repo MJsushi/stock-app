@@ -662,7 +662,7 @@ export default function InboundPage() {
                   </div>
 
                   <div>
-                    หาย: {renderValue(s.diff, { unit: " kg", decimals: 3 })}
+                    หาย/เกิน: {renderValue(s.diff, { unit: " kg", decimals: 3 })}
                   </div>
 
                   <div>
